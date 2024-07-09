@@ -74,7 +74,19 @@ def html_to_jira(html):
     def parse_image(element):
         src = element.get("src", "")
         alt = element.get("alt", "")
-        return f"!{src}!" if not alt else f"!{src}|alt={alt}!"
+        width = element.get("width", "")
+        height = element.get("height", "")
+
+        res = f" !{src}"
+        if alt:
+            res += f"|alt={alt}"
+        if width:
+            res += f"|width={width}"
+        if height:
+            res += f"|height={height}"
+
+        res += "!"
+        return res
 
     for element in soup.body.find_all(recursive=False):
         jira_markup.append(parse_element(element))
