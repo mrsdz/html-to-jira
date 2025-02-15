@@ -28,11 +28,11 @@ def html_to_jira(html):
             return f"+{parse_children(element)}+"
         elif element.name == "ul":
             return "\n".join(
-                [f"* {parse_children(li)}" for li in element.find_all("li", recursive=False)]
+                [f"* {parse_children(li)}" for li in element.find_all("li")]
             )
         elif element.name == "ol":
             return "\n".join(
-                [f"# {parse_children(li)}" for li in element.find_all("li", recursive=False)]
+                [f"# {parse_children(li)}" for li in element.find_all("li")]
             )
         elif element.name == "a":
             return f"[{element.get_text()}|{element['href']}]"
