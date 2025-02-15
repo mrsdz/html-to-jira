@@ -13,24 +13,26 @@ def html_to_jira(html):
 
     def parse_element(element):
         if element.name == "h1":
-            return f"h1. {element.get_text()}"
+            return f"h1. {parse_children(element)}"
         elif element.name == "h2":
-            return f"h2. {element.get_text()}"
+            return f"h2. {parse_children(element)}"
         elif element.name == "h3":
-            return f"h3. {element.get_text()}"
+            return f"h3. {parse_children(element)}"
         elif element.name == "p":
             return parse_children(element)
         elif element.name == "em":
-            return f"_{element.get_text()}_"
+            return f"_{parse_children(element)}_"
         elif element.name == "strong":
-            return f"*{element.get_text()}*"
+            return f"*{parse_children(element)}*"
+        elif element.name == "u":
+            return f"+{parse_children(element)}+"
         elif element.name == "ul":
             return "\n".join(
-                [f"* {parse_children(li)}" for li in element.find_all("li")]
+                [f"* {parse_children(li)}" for li in element.find_all("li", recursive=False)]
             )
         elif element.name == "ol":
             return "\n".join(
-                [f"# {parse_children(li)}" for li in element.find_all("li")]
+                [f"# {parse_children(li)}" for li in element.find_all("li", recursive=False)]
             )
         elif element.name == "a":
             return f"[{element.get_text()}|{element['href']}]"
