@@ -1,4 +1,4 @@
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup, Tag, NavigableString
 import re
 
 
@@ -11,7 +11,7 @@ def html_to_jira(html):
 
     jira_markup = []
 
-    def parse_element(element):
+    def parse_element(element, level=0):
         if element.name == "h1":
             return f"h1. {parse_children(element)}"
         elif element.name == "h2":
@@ -26,14 +26,8 @@ def html_to_jira(html):
             return f"*{parse_children(element)}*"
         elif element.name == "u":
             return f"+{parse_children(element)}+"
-        elif element.name == "ul":
-            return "\n".join(
-                [f"* {parse_children(li)}" for li in element.find_all("li")]
-            )
-        elif element.name == "ol":
-            return "\n".join(
-                [f"# {parse_children(li)}" for li in element.find_all("li")]
-            )
+        elif element.name in ["ul", "ol"]:
+            return parse_list(element, level)
         elif element.name == "a":
             return f"[{element.get_text()}|{element['href']}]"
         elif element.name == "table":
@@ -53,14 +47,34 @@ def html_to_jira(html):
         return element.get_text()
 
     def parse_children(element):
-        if not element.contents:
-            return ""
-        return "".join(
-            [
+        """Safely parses child elements without assuming .contents exists"""
+        if isinstance(element, NavigableString):
+            return element.strip()
+        elif isinstance(element, Tag):
+            return "".join(
                 parse_element(child) if isinstance(child, Tag) else child
                 for child in element.contents
-            ]
-        )
+            ).strip()
+        return ""
+
+    def parse_list(element, level=0):
+        """ Recursively parses lists and ensures no duplication """
+        prefix = "*" * (level + 1) if element.name == "ul" else "#" * (level + 1)
+        items = []
+
+        for li in element.find_all("li", recursive=False):
+            # Extract only non-list text from the <li>
+            text_parts = [parse_children(child) for child in li.contents if not child.name or child.name not in ["ul", "ol"]]
+            item_text = " ".join(filter(None, text_parts))  # Ensure no extra spaces
+
+            # Find nested lists inside the current <li>
+            sub_list = li.find(["ul", "ol"])
+            if sub_list:
+                item_text += "\n" + parse_list(sub_list, level + 1)
+
+            items.append(f"{prefix} {item_text}")
+
+        return "\n".join(items)
 
     def parse_span_with_styles(element):
         style = element["style"]
