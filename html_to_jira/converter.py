@@ -29,7 +29,9 @@ def html_to_jira(html):
         elif element.name in ["ul", "ol"]:
             return parse_list(element, level)
         elif element.name == "a":
-            return f"[{element.get_text()}|{element['href']}]"
+            return f"[{element.get_text()}|{element.get('href', '')}]"
+        elif element.name == "li":
+            return parse_children(element)
         elif element.name == "table":
             rows = element.find_all("tr")
             table_markup = []
@@ -44,18 +46,25 @@ def html_to_jira(html):
             return parse_image(element)
         elif element.name == "span" and "style" in element.attrs:
             return parse_span_with_styles(element)
-        return element.get_text()
+        return element.get_text(strip=True)
 
     def parse_children(element):
         """Safely parses child elements without assuming .contents exists"""
         if isinstance(element, NavigableString):
             return element.strip()
-        elif isinstance(element, Tag):
-            return "".join(
-                parse_element(child) if isinstance(child, Tag) else child
-                for child in element.contents
-            ).strip()
-        return ""
+
+        result = []
+        for child in element.contents:
+            if isinstance(child, Tag):
+                if child.name in ["ul", "ol"]:
+                    result.append(parse_list(child))
+                else:
+                    result.append(parse_element(child))
+            elif isinstance(child, NavigableString):
+                stripped = child.strip()
+                if stripped:
+                    result.append(stripped)
+        return "\n".join(filter(None, result)).strip()
 
     def parse_list(element, level=0):
         """ Recursively parses lists and ensures no duplication """
@@ -65,11 +74,9 @@ def html_to_jira(html):
         for li in element.find_all("li", recursive=False):
             # Extract only non-list text from the <li>
             text_parts = [parse_children(child) for child in li.contents if not child.name or child.name not in ["ul", "ol"]]
-            item_text = " ".join(filter(None, text_parts))  # Ensure no extra spaces
+            item_text = " ".join(filter(None, text_parts))
 
-            # Find nested lists inside the current <li>
-            sub_list = li.find(["ul", "ol"])
-            if sub_list:
+            for sub_list in li.find_all(["ul", "ol"], recursive=False):
                 item_text += "\n" + parse_list(sub_list, level + 1)
 
             items.append(f"{prefix} {item_text}")
@@ -104,7 +111,17 @@ def html_to_jira(html):
         res += "!"
         return res
 
-    for element in soup.body.find_all(recursive=False):
-        jira_markup.append(parse_element(element))
+    # Walk all top-level elements and capture orphaned nested lists
+    for element in soup.body.children:
+        if isinstance(element, Tag):
+            parsed = parse_element(element)
+            if parsed.strip():
+                jira_markup.append(parsed)
+
+            for child in element.find_all(["ol", "ul"], recursive=False):
+                if child.parent == element and child.name != element.name:
+                    nested = parse_list(child)
+                    if nested.strip():
+                        jira_markup.append(nested)
 
     return "\n\n".join(jira_markup)
